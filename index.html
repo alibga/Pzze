@@ -647,6 +647,9 @@ a.soon{pointer-events:none;cursor:default;filter:grayscale(.35) saturate(.8);opa
 .vtab.xm[aria-pressed="true"]{border-color:#2fa05e;box-shadow:0 0 0 3px rgba(47,160,94,.25);background:rgba(47,160,94,.1)}
 .scard .role{display:block;font:700 .72rem/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:2px 0 4px}
 body[data-vol="2"] .mapboard-bg{}
+/* ===== v8: visitor counter ===== */
+.visits{display:flex;align-items:center;justify-content:center;gap:8px;margin:14px auto 22px !important;font:700 .92rem/1 var(--sans);color:var(--muted)}
+.visits b{font:800 1.15rem/1 var(--sans);color:var(--text);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -796,6 +799,7 @@ body[data-vol="2"] .mapboard-bg{}
   <div class="wrap">
     <p>&copy; <span id="yr">2026</span> Bouaouina Belal &middot; DEADOKU</p>
   </div>
+  <p class="visits" id="visits" hidden><svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg><b id="visitsN">167</b><span>detectives have visited</span></p>
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1746,6 +1750,18 @@ var PALS = [
 var CAPS = ['Case file','Police dossier','Classified','Training file'];
 var filter = 'all', lastId = null;
 var VOL = 1;
+/* visitor counter: counts each browser once (shared counter on counterapi.dev), shown as VISIT_START - 1 + count, so the first real visit reads 167 */
+var VISIT_START = 167, VISIT_NS = 'deadoku-com', VISIT_KEY = 'visitors';
+function showVisits(n){ var el = $('visits'); if (!el || !(n >= VISIT_START)) return; $('visitsN').textContent = n.toLocaleString('en-US'); el.hidden = false; lsSet('deadoku.visits', String(n)); }
+function countVisit(){
+  var cached = +lsGet('deadoku.visits'); if (cached >= VISIT_START) showVisits(cached); else showVisits(VISIT_START);
+  if (typeof fetch !== 'function') return;
+  var counted = lsGet('deadoku.counted') === '1', ctl = (typeof AbortController === 'function') ? new AbortController() : null, tm = setTimeout(function(){ if (ctl) ctl.abort(); }, 6000);
+  fetch('https://api.counterapi.dev/v1/' + VISIT_NS + '/' + VISIT_KEY + (counted ? '/' : '/up'), ctl ? {signal: ctl.signal} : {})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ clearTimeout(tm); if (d && typeof d.count === 'number'){ if (!counted) lsSet('deadoku.counted', '1'); showVisits(VISIT_START - 1 + d.count); } })
+    .catch(function(){ clearTimeout(tm); });
+}
 function soonLink(a, txt){ a.removeAttribute('href'); a.removeAttribute('target'); a.setAttribute('aria-disabled','true'); a.setAttribute('tabindex','-1'); a.classList.add('soon'); a.lastChild.textContent = txt; var sp = a.querySelector('span'); if (sp) sp.textContent = txt; }
 function levelOf(id){ if (id > V2BASE) return V2.cases[id - V2BASE - 1].lv; return id === 0 ? 0 : Math.floor((id - 1) / PER); }
 (function(){ var css = ''; for (var n in V2.faces) css += '.av-' + n + '{background-image:url("' + V2.faces[n] + '")}'; var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st); })();
@@ -1953,6 +1969,7 @@ ready(function(){
     document.documentElement.setAttribute('data-theme', n); lsSet('deadoku.theme', n); syncTheme(); });
   syncTheme();
   wireHome();
+  countVisit();
   buildHome();
   // re-measure once layout/fonts settle
   requestAnimationFrame(function(){ if (S) renderMap(false); });
