@@ -1084,7 +1084,7 @@ function buildCase() {
 
 /* ---------------------------------------------------------------- config */
 var AMAZON_URL    = 'https://a.co/d/0egbQLYo';   // <<< Volume 1 - put your real ASIN here
-var AMAZON_URL_V2 = '';   // <<< Volume 2 - leave EMPTY to show "Coming soon"; paste the real Volume 2 Amazon link here when you have it
+var AMAZON_URL_V2 = 'https://a.co/d/02sgI5WF';   // <<< Volume 2 - leave EMPTY to show "Coming soon"
 var NAME_LIST  = ['Marcus','Elena','Walter','Daniel','Fiona','Antonio','Jake','Margaret','Kenji','Priya','Victor','Nora'];
 function hue(i){return 'var(--s'+(i+1)+')';}
 var KN = ['@0','@1','@2','@3','@4','@5','@6','@7'];
@@ -1750,17 +1750,28 @@ var PALS = [
 var CAPS = ['Case file','Police dossier','Classified','Training file'];
 var filter = 'all', lastId = null;
 var VOL = 1;
-/* visitor counter: counts each browser once (shared counter on counterapi.dev), shown as VISIT_START - 1 + count, so the first real visit reads 167 */
+/* visitor counter: shown number = VISIT_START - 1 + shared count, so the first real visit reads 167 */
 var VISIT_START = 167, VISIT_NS = 'deadoku-com', VISIT_KEY = 'visitors';
 function showVisits(n){ var el = $('visits'); if (!el || !(n >= VISIT_START)) return; $('visitsN').textContent = n.toLocaleString('en-US'); el.hidden = false; lsSet('deadoku.visits', String(n)); }
+function sessGet(){ try { return sessionStorage.getItem('deadoku.sess'); } catch(e){ return null; } }
+function sessSet(){ try { sessionStorage.setItem('deadoku.sess','1'); } catch(e){} }
 function countVisit(){
-  var cached = +lsGet('deadoku.visits'); if (cached >= VISIT_START) showVisits(cached); else showVisits(VISIT_START);
+  /* every NEW visit (new tab / new browser session) adds 1; reloading the same tab does not. Two free services are tried in turn. */
+  var cached = +lsGet('deadoku.visits'); showVisits(cached >= VISIT_START ? cached : VISIT_START);
   if (typeof fetch !== 'function') return;
-  var counted = lsGet('deadoku.counted') === '1', ctl = (typeof AbortController === 'function') ? new AbortController() : null, tm = setTimeout(function(){ if (ctl) ctl.abort(); }, 6000);
-  fetch('https://api.counterapi.dev/v1/' + VISIT_NS + '/' + VISIT_KEY + (counted ? '/' : '/up'), ctl ? {signal: ctl.signal} : {})
-    .then(function(r){ return r.json(); })
-    .then(function(d){ clearTimeout(tm); if (d && typeof d.count === 'number'){ if (!counted) lsSet('deadoku.counted', '1'); showVisits(VISIT_START - 1 + d.count); } })
-    .catch(function(){ clearTimeout(tm); });
+  var fresh = sessGet() !== '1', base = VISIT_NS + '/' + VISIT_KEY;
+  var tries = [
+    {url: 'https://api.counterapi.dev/v1/' + base + (fresh ? '/up' : '/'), pick: function(d){ return d && d.count; }},
+    {url: 'https://abacus.jasoncameron.dev/' + (fresh ? 'hit/' : 'get/') + base, pick: function(d){ return d && d.value; }}
+  ];
+  (function next(i){
+    if (i >= tries.length) return;
+    var t = tries[i], ctl = (typeof AbortController === 'function') ? new AbortController() : null, tm = setTimeout(function(){ if (ctl) ctl.abort(); }, 6000);
+    fetch(t.url, ctl ? {signal: ctl.signal, cache: 'no-store'} : {cache: 'no-store'})
+      .then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(d){ clearTimeout(tm); var n = +t.pick(d); if (!(n >= 1)) throw new Error('bad reply'); if (fresh) sessSet(); showVisits(Math.max(VISIT_START - 1 + n, +lsGet('deadoku.visits') || 0)); })
+      .catch(function(e){ clearTimeout(tm); if (window.console) console.warn('visit counter ' + (i + 1) + ' failed:', e && e.message); next(i + 1); });
+  })(0);
 }
 function soonLink(a, txt){ a.removeAttribute('href'); a.removeAttribute('target'); a.setAttribute('aria-disabled','true'); a.setAttribute('tabindex','-1'); a.classList.add('soon'); a.lastChild.textContent = txt; var sp = a.querySelector('span'); if (sp) sp.textContent = txt; }
 function levelOf(id){ if (id > V2BASE) return V2.cases[id - V2BASE - 1].lv; return id === 0 ? 0 : Math.floor((id - 1) / PER); }
